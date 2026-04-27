@@ -7,11 +7,11 @@ from apscheduler.triggers.cron import CronTrigger
 from config import REPORT_DAY, REPORT_TIME
 from db import (
     deactivate_user,
-    get_active_filters,
     get_active_users,
     get_last_processed_date,
     get_max_insert_date,
-    get_price_data_for_org,
+    get_top_service_per_org,
+    get_top_specialization,
     update_last_processed_date,
 )
 from report import build_report
@@ -31,19 +31,21 @@ async def send_weekly_report(bot) -> None:
         logger.info("No new rows since %s, skipping", last_date)
         return
 
-    users = await get_active_users()
-    filters = await get_active_filters()
-    today = date.today()
+    spec_row = await get_top_specialization(last_date)
+    if spec_row is None:
+        logger.info("No specialization data found, skipping")
+        return
 
+    services = await get_top_service_per_org(spec_row["specialization"], last_date)
+    message = build_report(spec_row, services, date.today())
+
+    if message is None:
+        logger.info("Empty report, skipping")
+        return
+
+    users = await get_active_users()
     for user in users:
         try:
-            rows = await get_price_data_for_org(
-                user["organization_name"], filters, last_date
-            )
-            message = build_report(user["organization_name"], rows, today)
-            if message is None:
-                logger.info("Empty report for %s, skipping", user["organization_name"])
-                continue
             await bot.send_message(user["telegram_id"], message)
         except Exception as exc:
             logger.error("Failed to send to %s: %s", user["telegram_id"], exc)
