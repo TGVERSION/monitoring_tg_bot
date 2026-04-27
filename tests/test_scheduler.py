@@ -113,7 +113,7 @@ async def test_continues_after_single_user_error():
          patch("scheduler.get_top_specialization", new_callable=AsyncMock) as m_spec, \
          patch("scheduler.get_top_service_per_org", new_callable=AsyncMock) as m_svc, \
          patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
-         patch("scheduler.update_last_processed_date", new_callable=AsyncMock):
+         patch("scheduler.update_last_processed_date", new_callable=AsyncMock) as m_update:
         m_last.return_value = date(2026, 4, 20)
         m_max.return_value = date(2026, 4, 27)
         m_spec.return_value = _spec_row()
@@ -124,6 +124,7 @@ async def test_continues_after_single_user_error():
         from scheduler import send_weekly_report
         await send_weekly_report(bot)
         assert bot.send_message.call_count == 2
+        m_update.assert_called_once_with(date(2026, 4, 27))
 
 
 @pytest.mark.asyncio
