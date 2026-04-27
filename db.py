@@ -6,7 +6,7 @@ from datetime import date as date_type
 from config import DATABASE_URL
 
 ALLOWED_FILTER_FIELDS = {
-    "GroupName", "SubGroupName", "ServiceName",
+    "GroupName", "SubGroupName", "ServiceName", "reference_serv",
     "type_reception", "specialization", "type_filial", "type_group",
 }
 
@@ -113,6 +113,53 @@ async def get_active_filters() -> list:
     pool = await get_pool()
     return await pool.fetch(
         "SELECT field_name, field_value FROM admin_filters WHERE is_active = true"
+    )
+
+
+async def get_top_specialization(last_date):
+    pool = await get_pool()
+    fallback = date_type(1900, 1, 1)
+    since = last_date if last_date is not None else fallback
+    return await pool.fetchrow(
+        """
+        SELECT
+            specialization,
+            SUM(ABS("PriceDifference")) AS total_abs_change,
+            SUM("PriceDifference")      AS net_change,
+            SUM("Price" - "PriceDifference") AS sum_old_price
+        FROM price_monitoring
+        WHERE "InsertDate" > $1
+          AND specialization IS NOT NULL
+          AND specialization <> ''
+          AND "PriceDifference" IS NOT NULL
+          AND "Price" IS NOT NULL
+        GROUP BY specialization
+        ORDER BY total_abs_change DESC
+        LIMIT 1
+        """,
+        since,
+    )
+
+
+async def get_top_service_per_org(specialization: str, last_date) -> list:
+    pool = await get_pool()
+    fallback = date_type(1900, 1, 1)
+    since = last_date if last_date is not None else fallback
+    return await pool.fetch(
+        """
+        SELECT DISTINCT ON ("OrganizationName")
+            "OrganizationName",
+            "ServiceName",
+            "Price",
+            "PriceDifference"
+        FROM price_monitoring
+        WHERE "InsertDate" > $1
+          AND specialization = $2
+          AND "PriceDifference" IS NOT NULL
+          AND "Price" IS NOT NULL
+        ORDER BY "OrganizationName", ABS("PriceDifference") DESC
+        """,
+        since, specialization,
     )
 
 
