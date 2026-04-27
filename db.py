@@ -1,13 +1,25 @@
+import asyncio
+
 import asyncpg
+from datetime import date as date_type
+
 from config import DATABASE_URL
 
+ALLOWED_FILTER_FIELDS = {
+    "GroupName", "SubGroupName", "ServiceName",
+    "type_reception", "specialization", "type_filial", "type_group",
+}
+
 _pool = None
+_pool_lock = asyncio.Lock()
 
 
 async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        _pool = await asyncpg.create_pool(DATABASE_URL)
+        async with _pool_lock:
+            if _pool is None:
+                _pool = await asyncpg.create_pool(DATABASE_URL)
     return _pool
 
 
@@ -86,7 +98,15 @@ async def get_max_insert_date():
 
 async def update_last_processed_date(new_date) -> None:
     pool = await get_pool()
-    await pool.execute("UPDATE report_state SET last_processed_date = $1", new_date)
+    updated = await pool.execute(
+        "UPDATE report_state SET last_processed_date = $1",
+        new_date,
+    )
+    if updated == "UPDATE 0":
+        await pool.execute(
+            "INSERT INTO report_state (last_processed_date) VALUES ($1)",
+            new_date,
+        )
 
 
 async def get_active_filters() -> list:
@@ -135,7 +155,6 @@ async def get_price_data_for_org(
     organization_name: str, filters: list, last_date
 ) -> list:
     pool = await get_pool()
-    from datetime import date as date_type
 
     fallback = date_type(1900, 1, 1)
     since = last_date if last_date is not None else fallback
@@ -153,6 +172,8 @@ async def get_price_data_for_org(
     or_clauses = []
     params = [organization_name, since]
     for i, f in enumerate(filters, start=3):
+        if f["field_name"] not in ALLOWED_FILTER_FIELDS:
+            raise ValueError(f"Disallowed filter field: {f['field_name']!r}")
         or_clauses.append(f'"{f["field_name"]}" = ${i}')
         params.append(f["field_value"])
 
