@@ -133,6 +133,7 @@ async def get_top_specialization(last_date):
           AND specialization <> ''
           AND "PriceDifference" IS NOT NULL
           AND "Price" IS NOT NULL
+          AND "OrganizationName" IN (SELECT organization_name FROM organizations)
         GROUP BY specialization
         ORDER BY total_abs_change DESC
         LIMIT 1
@@ -157,6 +158,7 @@ async def get_top_service_per_org(specialization: str, last_date) -> list:
           AND specialization = $2
           AND "PriceDifference" IS NOT NULL
           AND "Price" IS NOT NULL
+          AND "OrganizationName" IN (SELECT organization_name FROM organizations)
         ORDER BY "OrganizationName", ABS("PriceDifference") DESC
         """,
         since, specialization,

@@ -13,24 +13,30 @@ def build_report(spec_row, services: list, report_date: date) -> str | None:
     trend_word = "повышают" if net_change > 0 else "снижают"
     pct_sign = "+" if avg_pct > 0 else ""
 
-    lines = [
-        f"Конкуренты {trend_emoji} {trend_word} цены",
-        "",
-        f"Специализация: {spec_row['specialization']} ({pct_sign}{avg_pct:.1f}% к прошлому периоду)",
-        "",
-        "Услуги с наибольшими изменениями у этой специализации:",
-    ]
-
+    service_lines = []
     for svc in services:
         diff = float(svc["PriceDifference"] or 0)
+        if diff == 0:
+            continue
         price = float(svc["Price"])
         old_price = price - diff
         svc_pct = round(diff / old_price * 100, 1) if old_price else 0.0
         svc_emoji = "⬆️" if diff > 0 else "⬇️"
         svc_sign = "+" if svc_pct > 0 else ""
-        lines.append(
+        service_lines.append(
             f"{svc_emoji} {svc['OrganizationName']} - {svc['ServiceName']}"
             f" — {price:.0f}₽ ({svc_sign}{svc_pct:.1f}%)"
         )
 
-    return "\n".join(lines)
+    if not service_lines:
+        return None
+
+    header = "\n".join([
+        f"Конкуренты {trend_emoji} {trend_word} цены",
+        "",
+        f"Специализация: {spec_row['specialization']} ({pct_sign}{avg_pct:.1f}% к прошлому периоду)",
+        "",
+        "Услуги с наибольшими изменениями у этой специализации:",
+    ])
+
+    return header + "\n" + "\n\n".join(service_lines)

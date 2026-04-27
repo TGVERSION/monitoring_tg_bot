@@ -104,7 +104,20 @@ def test_section_header_present():
     assert "Услуги с наибольшими изменениями" in result
 
 
-def test_zero_sum_old_price_does_not_crash():
-    result = build_report(spec("Хирургия", 0.0, 0.0), [svc("Клиника А", "УЗИ", 1000.0, 0.0)], date(2026, 4, 27))
-    assert result is not None
-    assert "0.0%" in result
+def test_zero_diff_service_is_skipped():
+    result = build_report(spec("Хирургия", 100.0, 1000.0), [svc("Клиника А", "УЗИ", 1000.0, 0.0)], date(2026, 4, 27))
+    assert result is None
+
+
+def test_returns_none_when_all_services_have_zero_diff():
+    services = [svc("Клиника А", "УЗИ", 1000.0, 0.0), svc("Клиника Б", "МРТ", 2000.0, 0.0)]
+    assert build_report(spec("Хирургия", 0.0, 0.0), services, date(2026, 4, 27)) is None
+
+
+def test_services_separated_by_blank_lines():
+    services = [
+        svc("Клиника А", "УЗИ", 1100.0, 100.0),
+        svc("Клиника Б", "МРТ", 5500.0, 500.0),
+    ]
+    result = build_report(spec("Хирургия", 600.0, 6000.0), services, date(2026, 4, 27))
+    assert "\n\n" in result
