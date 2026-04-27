@@ -2,65 +2,108 @@ from datetime import date
 from report import build_report
 
 
-def row(group, price, diff):
-    return {"GroupName": group, "Price": price, "PriceDifference": diff}
+def spec(specialization, net_change, sum_old_price):
+    return {
+        "specialization": specialization,
+        "net_change": net_change,
+        "sum_old_price": sum_old_price,
+    }
 
 
-def test_returns_none_for_empty_rows():
-    assert build_report("Клиника", [], date(2026, 4, 27)) is None
+def svc(org, service, price, diff):
+    return {
+        "OrganizationName": org,
+        "ServiceName": service,
+        "Price": price,
+        "PriceDifference": diff,
+    }
 
 
-def test_header_contains_org_name_and_date():
-    result = build_report("Клиника Альфа", [row("Анализы", 1000.0, 0)], date(2026, 4, 27))
-    assert "Клиника Альфа" in result
-    assert "27.04.2026" in result
+def test_returns_none_when_spec_row_is_none():
+    assert build_report(None, [svc("Клиника А", "УЗИ", 1000.0, 100.0)], date(2026, 4, 27)) is None
 
 
-def test_groups_services_by_group_name():
-    rows = [row("Анализы", 1000.0, 0), row("Анализы", 800.0, 0), row("Консультации", 2000.0, 0)]
-    result = build_report("Клиника", rows, date(2026, 4, 27))
-    assert "Анализы" in result
-    assert "Консультации" in result
+def test_returns_none_when_no_services():
+    assert build_report(spec("Хирургия", 500.0, 5000.0), [], date(2026, 4, 27)) is None
 
 
-def test_shows_service_count():
-    rows = [row("Анализы", 1000.0, 0), row("Анализы", 800.0, 0)]
-    result = build_report("Клиника", rows, date(2026, 4, 27))
-    assert "2 усл." in result
+def test_trend_up_when_net_change_positive():
+    result = build_report(spec("Хирургия", 500.0, 5000.0), [svc("Клиника А", "УЗИ", 1000.0, 100.0)], date(2026, 4, 27))
+    assert "⬆️" in result
+    assert "повышают" in result
 
 
-def test_no_change_shows_label():
-    result = build_report("Клиника", [row("Анализы", 1000.0, 0)], date(2026, 4, 27))
-    assert "без изм." in result
+def test_trend_down_when_net_change_negative():
+    result = build_report(spec("Хирургия", -500.0, 5000.0), [svc("Клиника А", "УЗИ", 900.0, -100.0)], date(2026, 4, 27))
+    assert "⬇️" in result
+    assert "снижают" in result
 
 
-def test_positive_percent():
-    # old = 1000, new = 1100, diff = +100 → +10%
-    result = build_report("Клиника", [row("Анализы", 1100.0, 100)], date(2026, 4, 27))
+def test_specialization_name_in_output():
+    result = build_report(spec("Кардиология", 200.0, 2000.0), [svc("Клиника А", "ЭКГ", 500.0, 50.0)], date(2026, 4, 27))
+    assert "Кардиология" in result
+
+
+def test_avg_pct_positive():
+    # net=500, sum_old=5000 → +10.0%
+    result = build_report(spec("Хирургия", 500.0, 5000.0), [svc("Клиника А", "УЗИ", 1100.0, 100.0)], date(2026, 4, 27))
     assert "+10.0%" in result
 
 
-def test_negative_percent():
-    # old = 1000, new = 900, diff = -100 → -10%
-    result = build_report("Клиника", [row("Анализы", 900.0, -100)], date(2026, 4, 27))
+def test_avg_pct_negative():
+    # net=-500, sum_old=5000 → -10.0%
+    result = build_report(spec("Хирургия", -500.0, 5000.0), [svc("Клиника А", "УЗИ", 900.0, -100.0)], date(2026, 4, 27))
     assert "-10.0%" in result
 
 
-def test_none_group_name_falls_back_to_prochee():
-    result = build_report("Клиника", [row(None, 500.0, 0)], date(2026, 4, 27))
-    assert "Прочее" in result
+def test_service_line_contains_org_and_service():
+    result = build_report(
+        spec("Хирургия", 100.0, 1000.0),
+        [svc("Клиника Альфа", "Аппендэктомия", 15000.0, 500.0)],
+        date(2026, 4, 27),
+    )
+    assert "Клиника Альфа" in result
+    assert "Аппендэктомия" in result
+    assert "15000₽" in result
 
 
-def test_none_price_difference_treated_as_zero():
-    result = build_report("Клиника", [row("Анализы", 1000.0, None)], date(2026, 4, 27))
-    assert "без изм." in result
+def test_service_pct_up():
+    # price=1100, diff=100 → old=1000 → +10.0%
+    result = build_report(
+        spec("Хирургия", 100.0, 1000.0),
+        [svc("Клиника А", "УЗИ", 1100.0, 100.0)],
+        date(2026, 4, 27),
+    )
+    assert "+10.0%" in result
 
 
-def test_none_price_rows_excluded_from_percent():
-    # строка с Price=None и PriceDifference=100 не должна влиять на %
-    rows = [
-        row("Анализы", 1000.0, 100),   # old=900, diff=+100 → +11.1%
-        {"GroupName": "Анализы", "Price": None, "PriceDifference": 999},  # не должна учитываться
+def test_service_pct_down():
+    # price=900, diff=-100 → old=1000 → -10.0%
+    result = build_report(
+        spec("Хирургия", -100.0, 1000.0),
+        [svc("Клиника А", "УЗИ", 900.0, -100.0)],
+        date(2026, 4, 27),
+    )
+    assert "-10.0%" in result
+
+
+def test_multiple_orgs_all_shown():
+    services = [
+        svc("Клиника А", "УЗИ", 1100.0, 100.0),
+        svc("Клиника Б", "МРТ", 5500.0, 500.0),
+        svc("Клиника В", "Анализ крови", 330.0, 30.0),
     ]
-    result = build_report("Клиника", rows, date(2026, 4, 27))
-    assert "+11.1%" in result
+    result = build_report(spec("Хирургия", 630.0, 6000.0), services, date(2026, 4, 27))
+    assert "Клиника А" in result
+    assert "Клиника Б" in result
+    assert "Клиника В" in result
+
+
+def test_section_header_present():
+    result = build_report(spec("Хирургия", 100.0, 1000.0), [svc("Клиника А", "УЗИ", 1100.0, 100.0)], date(2026, 4, 27))
+    assert "Услуги с наибольшими изменениями" in result
+
+
+def test_zero_sum_old_price_does_not_crash():
+    result = build_report(spec("Хирургия", 0.0, 0.0), [svc("Клиника А", "УЗИ", 1000.0, 0.0)], date(2026, 4, 27))
+    assert result is not None
