@@ -143,7 +143,29 @@ async def filter_delete_list(callback: CallbackQuery) -> None:
 async def filter_delete_confirm(callback: CallbackQuery) -> None:
     filter_id = int(callback.data.split("_")[-1])
     await delete_filter(filter_id)
-    await callback.message.answer(f"✅ Фильтр #{filter_id} удалён.")
+
+    # Обновляем список фильтров в том же сообщении
+    filters = await get_all_filters()
+    if filters:
+        buttons = [
+            [InlineKeyboardButton(
+                text=f"#{f['id']} {f['field_name']} = {f['field_value']}",
+                callback_data=f"del_filter_{f['id']}",
+            )]
+            for f in filters
+        ]
+        buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_filters")])
+        await callback.message.edit_text(
+            f"✅ Фильтр #{filter_id} удалён.\n\nВыберите фильтр для удаления:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        )
+    else:
+        await callback.message.edit_text(
+            f"✅ Фильтр #{filter_id} удалён. Фильтров больше нет.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="admin_filters")]]
+            ),
+        )
     await callback.answer()
 
 
