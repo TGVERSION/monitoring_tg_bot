@@ -1,7 +1,7 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import Command
+from aiogram.filters import BaseFilter, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -9,6 +9,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
+    TelegramObject,
 )
 
 from config import ADMIN_TELEGRAM_ID
@@ -23,6 +24,16 @@ from db import (
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+
+class IsAdmin(BaseFilter):
+    async def __call__(self, event: TelegramObject) -> bool:
+        user = getattr(event, "from_user", None)
+        return user is not None and user.id == ADMIN_TELEGRAM_ID
+
+
+router.message.filter(IsAdmin())
+router.callback_query.filter(IsAdmin())
 
 FILTER_FIELDS = [
     "GroupName",
@@ -55,9 +66,6 @@ def _main_menu() -> InlineKeyboardMarkup:
 
 @router.message(Command("admin"))
 async def cmd_admin(message: Message) -> None:
-    if message.from_user.id != ADMIN_TELEGRAM_ID:
-        await message.answer("Нет доступа.")
-        return
     await message.answer("Панель администратора:", reply_markup=_main_menu())
 
 
@@ -208,7 +216,16 @@ async def org_inn_received(message: Message, state: FSMContext) -> None:
 async def org_name_received(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     name = message.text.strip()
-    await add_organization(data["inn"], name)
+    try:
+        await add_organization(data["inn"], name)
+    except Exception as exc:
+        await state.clear()
+        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower():
+            await message.answer(f"❌ Организация с ИНН {data['inn']} уже существует.")
+        else:
+            logger.error("Failed to add organization: %s", exc)
+            await message.answer("❌ Ошибка при добавлении организации. Попробуйте ещё раз.")
+        return
     await state.clear()
     await message.answer(f"✅ Организация «{name}» (ИНН: {data['inn']}) добавлена.")
 
