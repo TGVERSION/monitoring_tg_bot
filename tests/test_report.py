@@ -107,3 +107,4 @@ def test_section_header_present():
 def test_zero_sum_old_price_does_not_crash():
     result = build_report(spec("Хирургия", 0.0, 0.0), [svc("Клиника А", "УЗИ", 1000.0, 0.0)], date(2026, 4, 27))
     assert result is not None
+    assert "0.0%" in result
