@@ -59,7 +59,7 @@ async def test_continues_after_single_user_error():
          patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
          patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
          patch("scheduler.get_price_data_for_org", new_callable=AsyncMock) as m_data, \
-         patch("scheduler.update_last_processed_date", new_callable=AsyncMock):
+         patch("scheduler.update_last_processed_date", new_callable=AsyncMock) as m_update:
         m_last.return_value = date(2026, 4, 20)
         m_max.return_value = date(2026, 4, 27)
         m_users.return_value = [
@@ -75,6 +75,7 @@ async def test_continues_after_single_user_error():
         from scheduler import send_weekly_report
         await send_weekly_report(bot)
         assert bot.send_message.call_count == 2
+        m_update.assert_called_once_with(date(2026, 4, 27))
 
 
 @pytest.mark.asyncio
@@ -84,7 +85,8 @@ async def test_skips_user_with_empty_report():
          patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
          patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
          patch("scheduler.get_price_data_for_org", new_callable=AsyncMock) as m_data, \
-         patch("scheduler.update_last_processed_date", new_callable=AsyncMock):
+         patch("scheduler.update_last_processed_date", new_callable=AsyncMock), \
+         patch("scheduler.build_report", return_value=None):
         m_last.return_value = date(2026, 4, 20)
         m_max.return_value = date(2026, 4, 27)
         m_users.return_value = [{"telegram_id": 111, "organization_name": "Клиника Альфа"}]
@@ -94,3 +96,26 @@ async def test_skips_user_with_empty_report():
         from scheduler import send_weekly_report
         await send_weekly_report(bot)
         bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_deactivates_user_when_bot_blocked():
+    with patch("scheduler.get_last_processed_date", new_callable=AsyncMock) as m_last, \
+         patch("scheduler.get_max_insert_date", new_callable=AsyncMock) as m_max, \
+         patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
+         patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
+         patch("scheduler.get_price_data_for_org", new_callable=AsyncMock) as m_data, \
+         patch("scheduler.update_last_processed_date", new_callable=AsyncMock), \
+         patch("scheduler.deactivate_user", new_callable=AsyncMock) as m_deactivate:
+        m_last.return_value = date(2026, 4, 20)
+        m_max.return_value = date(2026, 4, 27)
+        m_users.return_value = [{"telegram_id": 111, "organization_name": "Клиника Альфа"}]
+        m_filters.return_value = []
+        m_data.return_value = [
+            {"GroupName": "Анализы", "Price": 1000.0, "PriceDifference": 0}
+        ]
+        bot = AsyncMock()
+        bot.send_message.side_effect = Exception("Forbidden: bot was blocked by the user")
+        from scheduler import send_weekly_report
+        await send_weekly_report(bot)
+        m_deactivate.assert_called_once_with(111)
