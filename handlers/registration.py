@@ -23,6 +23,10 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     user = await get_user_by_telegram_id(message.from_user.id)
     if user and user["is_active"]:
         org = await get_organization_by_inn(user["inn"])
+        if not org:
+            await message.answer("Данные вашей клиники не найдены. Введите ИНН заново:")
+            await state.set_state(Registration.waiting_for_inn)
+            return
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[
                 InlineKeyboardButton(text="Изменить клинику", callback_data="change_clinic")
