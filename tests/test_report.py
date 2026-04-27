@@ -54,3 +54,13 @@ def test_none_group_name_falls_back_to_prochee():
 def test_none_price_difference_treated_as_zero():
     result = build_report("Клиника", [row("Анализы", 1000.0, None)], date(2026, 4, 27))
     assert "без изм." in result
+
+
+def test_none_price_rows_excluded_from_percent():
+    # строка с Price=None и PriceDifference=100 не должна влиять на %
+    rows = [
+        row("Анализы", 1000.0, 100),   # old=900, diff=+100 → +11.1%
+        {"GroupName": "Анализы", "Price": None, "PriceDifference": 999},  # не должна учитываться
+    ]
+    result = build_report("Клиника", rows, date(2026, 4, 27))
+    assert "+11.1%" in result

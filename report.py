@@ -18,12 +18,9 @@ def build_report(organization_name: str, rows: list, report_date: date) -> str |
         prices = [s["Price"] for s in services if s["Price"] is not None]
         avg_price = sum(prices) / len(prices) if prices else 0
 
-        total_diff = sum(s["PriceDifference"] or 0 for s in services)
-        total_old = sum(
-            (s["Price"] - (s["PriceDifference"] or 0))
-            for s in services
-            if s["Price"] is not None
-        )
+        valid = [s for s in services if s["Price"] is not None]
+        total_diff = sum(s["PriceDifference"] or 0 for s in valid)
+        total_old = sum(s["Price"] - (s["PriceDifference"] or 0) for s in valid)
 
         if total_old > 0 and total_diff != 0:
             pct = round(total_diff / total_old * 100, 1)
