@@ -129,35 +129,7 @@ def _build_filter_clause(filters: list, next_param: int) -> tuple:
     return f"AND ({' OR '.join(or_clauses)})", params
 
 
-async def get_top_specialization(last_date, filters: list = None):
-    pool = await get_pool()
-    fallback = date_type(1900, 1, 1)
-    since = last_date if last_date is not None else fallback
-    filter_clause, filter_params = _build_filter_clause(filters or [], next_param=2)
-    return await pool.fetchrow(
-        f"""
-        SELECT
-            specialization,
-            SUM(ABS("PriceDifference")) AS total_abs_change,
-            SUM("PriceDifference")      AS net_change,
-            SUM("Price" - "PriceDifference") AS sum_old_price
-        FROM price_monitoring
-        WHERE "InsertDate" > $1
-          AND specialization IS NOT NULL
-          AND specialization <> ''
-          AND "PriceDifference" IS NOT NULL
-          AND "Price" IS NOT NULL
-          AND "OrganizationName" IN (SELECT organization_name FROM organizations)
-          {filter_clause}
-        GROUP BY specialization
-        ORDER BY total_abs_change DESC
-        LIMIT 1
-        """,
-        since, *filter_params,
-    )
-
-
-async def get_top_specializations(last_date, filters: list = None, limit: int = 5) -> list:
+async def _fetch_top_specializations(last_date, filters, limit: int) -> list:
     pool = await get_pool()
     fallback = date_type(1900, 1, 1)
     since = last_date if last_date is not None else fallback
@@ -183,6 +155,15 @@ async def get_top_specializations(last_date, filters: list = None, limit: int = 
         """,
         since, limit, *filter_params,
     )
+
+
+async def get_top_specialization(last_date, filters: list = None):
+    rows = await _fetch_top_specializations(last_date, filters, limit=1)
+    return rows[0] if rows else None
+
+
+async def get_top_specializations(last_date, filters: list = None, limit: int = 5) -> list:
+    return await _fetch_top_specializations(last_date, filters, limit=limit)
 
 
 async def get_top_service_per_org(specialization: str, last_date, filters: list = None) -> list:
