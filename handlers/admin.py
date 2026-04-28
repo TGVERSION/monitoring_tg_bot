@@ -20,6 +20,7 @@ from db import (
     get_all_bot_users,
     get_all_filters,
     get_all_organizations,
+    set_user_active,
 )
 
 logger = logging.getLogger(__name__)
@@ -230,27 +231,56 @@ async def org_name_received(message: Message, state: FSMContext) -> None:
     await message.answer(f"✅ Организация «{name}» (ИНН: {data['inn']}) добавлена.")
 
 
+def _users_text(users) -> str:
+    if not users:
+        return "Нет зарегистрированных пользователей."
+    lines = []
+    for u in users:
+        status = "✅" if u["is_active"] else "❌"
+        date = u["registered_at"].strftime("%d.%m.%Y") if u["registered_at"] else "—"
+        lines.append(f"{status} {u['organization_name']} — {date}")
+    return f"Пользователи ({len(users)}):\n\n" + "\n".join(lines)
+
+
+def _users_keyboard(users) -> InlineKeyboardMarkup:
+    buttons = []
+    for u in users:
+        action = "🚫 Откл." if u["is_active"] else "✅ Вкл."
+        buttons.append([InlineKeyboardButton(
+            text=f"{action} {u['organization_name']}",
+            callback_data=f"toggle_user_{u['telegram_id']}",
+        )])
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="admin_back")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 @router.callback_query(F.data == "admin_users")
 async def show_users(callback: CallbackQuery) -> None:
     users = await get_all_bot_users()
-    if users:
-        lines = "\n".join(
-            f"• {u['organization_name']} (ИНН: {u['inn']}) "
-            f"— tg:{u['telegram_id']} {'✅' if u['is_active'] else '❌'}"
-            for u in users
-        )
-        text = f"Зарегистрированные пользователи:\n{lines}"
-    else:
-        text = "Нет зарегистрированных пользователей."
-
     await callback.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="admin_back")]]
-        ),
+        _users_text(users),
+        reply_markup=_users_keyboard(users),
     )
     await callback.answer()
 
+
+@router.callback_query(F.data.startswith("toggle_user_"))
+async def toggle_user(callback: CallbackQuery) -> None:
+    telegram_id = int(callback.data.removeprefix("toggle_user_"))
+    users = await get_all_bot_users()
+    user = next((u for u in users if u["telegram_id"] == telegram_id), None)
+    if user is None:
+        await callback.answer("Пользователь не найден.")
+        return
+    new_status = not user["is_active"]
+    await set_user_active(telegram_id, new_status)
+    users = await get_all_bot_users()
+    status_label = "✅ Активирован" if new_status else "🚫 Отключён"
+    await callback.message.edit_text(
+        _users_text(users),
+        reply_markup=_users_keyboard(users),
+    )
+    await callback.answer(f"{status_label}: {user['organization_name']}")
 
 
 @router.callback_query(F.data == "admin_back")

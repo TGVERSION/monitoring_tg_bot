@@ -57,6 +57,14 @@ async def deactivate_user(telegram_id: int):
     )
 
 
+async def set_user_active(telegram_id: int, is_active: bool) -> None:
+    pool = await get_pool()
+    await pool.execute(
+        "UPDATE bot_users SET is_active = $1 WHERE telegram_id = $2",
+        is_active, telegram_id,
+    )
+
+
 async def get_active_users() -> list:
     pool = await get_pool()
     return await pool.fetch(
