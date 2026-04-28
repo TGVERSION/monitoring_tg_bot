@@ -157,6 +157,34 @@ async def get_top_specialization(last_date, filters: list = None):
     )
 
 
+async def get_top_specializations(last_date, filters: list = None, limit: int = 5) -> list:
+    pool = await get_pool()
+    fallback = date_type(1900, 1, 1)
+    since = last_date if last_date is not None else fallback
+    filter_clause, filter_params = _build_filter_clause(filters or [], next_param=3)
+    return await pool.fetch(
+        f"""
+        SELECT
+            specialization,
+            SUM(ABS("PriceDifference")) AS total_abs_change,
+            SUM("PriceDifference")      AS net_change,
+            SUM("Price" - "PriceDifference") AS sum_old_price
+        FROM price_monitoring
+        WHERE "InsertDate" > $1
+          AND specialization IS NOT NULL
+          AND specialization <> ''
+          AND "PriceDifference" IS NOT NULL
+          AND "Price" IS NOT NULL
+          AND "OrganizationName" IN (SELECT organization_name FROM organizations)
+          {filter_clause}
+        GROUP BY specialization
+        ORDER BY total_abs_change DESC
+        LIMIT $2
+        """,
+        since, limit, *filter_params,
+    )
+
+
 async def get_top_service_per_org(specialization: str, last_date, filters: list = None) -> list:
     pool = await get_pool()
     fallback = date_type(1900, 1, 1)
