@@ -258,7 +258,7 @@ async def test_broadcast(callback: CallbackQuery) -> None:
 
     await callback.message.answer("Запускаю тест-рассылку...")
     try:
-        await send_weekly_report(callback.bot)
+        await send_weekly_report(callback.bot, force=True)
         await callback.message.answer("✅ Тест-рассылка завершена.")
     except Exception as exc:
         logger.error("Test broadcast failed: %s", exc)

@@ -20,7 +20,7 @@ from report import build_report
 logger = logging.getLogger(__name__)
 
 
-async def send_weekly_report(bot) -> None:
+async def send_weekly_report(bot, force: bool = False) -> None:
     last_date = await get_last_processed_date()
     max_date = await get_max_insert_date()
 
@@ -28,17 +28,18 @@ async def send_weekly_report(bot) -> None:
         logger.info("price_monitoring is empty, skipping")
         return
 
-    if last_date is not None and max_date <= last_date:
+    if not force and last_date is not None and max_date <= last_date:
         logger.info("No new rows since %s, skipping", last_date)
         return
 
+    since_date = None if force else last_date
     filters = await get_active_filters()
-    spec_row = await get_top_specialization(last_date, filters)
+    spec_row = await get_top_specialization(since_date, filters)
     if spec_row is None:
         logger.info("No specialization data found, skipping")
         return
 
-    services = await get_top_service_per_org(spec_row["specialization"], last_date, filters)
+    services = await get_top_service_per_org(spec_row["specialization"], since_date, filters)
     message = build_report(spec_row, services, date.today())
 
     if message is None:
@@ -54,7 +55,8 @@ async def send_weekly_report(bot) -> None:
             if "bot was blocked" in str(exc).lower():
                 await deactivate_user(user["telegram_id"])
 
-    await update_last_processed_date(max_date)
+    if not force:
+        await update_last_processed_date(max_date)
 
 
 def create_scheduler(bot) -> AsyncIOScheduler:
