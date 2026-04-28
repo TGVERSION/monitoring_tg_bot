@@ -1,6 +1,14 @@
 from datetime import date
 
 SEP = "━━━━━━━━━━━━━━━"
+_ANALYTICS_URL = (
+    "https://analytic.vismuth.ru/superset/dashboard/1/"
+    "?native_filters_key=5jlp9immVU61iAY-zTzq05vtIM60Sv-Z_DuCP9JHBjc37fuwCgu4oRNp5Btxl270"
+)
+FOOTER = (
+    f"\n{SEP}\n"
+    f'🟣 Хотите узнать больше? <a href="{_ANALYTICS_URL}">Полный отчёт на сайте аналитики</a>'
+)
 
 
 def _fmt_price(price: float) -> str:
@@ -58,4 +66,4 @@ def build_report(spec_row, services: list, report_date: date) -> str | None:
             parts.append("")
         parts += [SEP, "📉 Снизили цены", SEP] + down_lines
 
-    return "\n".join(parts)
+    return "\n".join(parts) + FOOTER

@@ -175,6 +175,13 @@ def test_down_services_sorted_by_abs_pct_descending():
     assert result.index("Клиника Б") < result.index("Клиника А") < result.index("Клиника В")
 
 
+def test_footer_analytics_link_present():
+    result = build_report(spec("Хирургия", 100.0, 1000.0), [svc("Клиника А", "УЗИ", 1100.0, 100.0)], date(2026, 4, 27))
+    assert "analytic.vismuth.ru" in result
+    assert "🟣" in result
+    assert "Хотите узнать больше" in result
+
+
 def test_mixed_up_down_each_section_sorted_by_abs_pct_descending():
     # Up: Клиника Б +30%, Клиника А +10%
     # Down: Клиника Г -30%, Клиника В -10%
