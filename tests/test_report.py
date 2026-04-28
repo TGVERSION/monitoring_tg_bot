@@ -29,14 +29,14 @@ def test_returns_none_when_no_services():
 
 def test_trend_up_when_net_change_positive():
     result = build_report(spec("Хирургия", 500.0, 5000.0), [svc("Клиника А", "УЗИ", 1000.0, 100.0)], date(2026, 4, 27))
-    assert "⬆️" in result
-    assert "повышают" in result
+    assert "🔺" in result
+    assert "Повысили цены" in result
 
 
 def test_trend_down_when_net_change_negative():
     result = build_report(spec("Хирургия", -500.0, 5000.0), [svc("Клиника А", "УЗИ", 900.0, -100.0)], date(2026, 4, 27))
-    assert "⬇️" in result
-    assert "снижают" in result
+    assert "🔻" in result
+    assert "Снизили цены" in result
 
 
 def test_specialization_name_in_output():
@@ -64,7 +64,8 @@ def test_service_line_contains_org_and_service():
     )
     assert "Клиника Альфа" in result
     assert "Аппендэктомия" in result
-    assert "15000₽" in result
+    assert "15 000 ₽" in result
+    assert "💰" in result
 
 
 def test_service_pct_up():
@@ -101,7 +102,7 @@ def test_multiple_orgs_all_shown():
 
 def test_section_header_present():
     result = build_report(spec("Хирургия", 100.0, 1000.0), [svc("Клиника А", "УЗИ", 1100.0, 100.0)], date(2026, 4, 27))
-    assert "Услуги с наибольшими изменениями" in result
+    assert "Повысили цены" in result
 
 
 def test_zero_diff_service_is_skipped():
@@ -114,10 +115,34 @@ def test_returns_none_when_all_services_have_zero_diff():
     assert build_report(spec("Хирургия", 0.0, 0.0), services, date(2026, 4, 27)) is None
 
 
-def test_services_separated_by_blank_lines():
+def test_blank_line_in_output():
     services = [
         svc("Клиника А", "УЗИ", 1100.0, 100.0),
         svc("Клиника Б", "МРТ", 5500.0, 500.0),
     ]
     result = build_report(spec("Хирургия", 600.0, 6000.0), services, date(2026, 4, 27))
     assert "\n\n" in result
+
+
+def test_up_and_down_sections_both_present():
+    services = [
+        svc("Клиника А", "УЗИ", 1100.0, 100.0),
+        svc("Клиника Б", "МРТ", 900.0, -100.0),
+    ]
+    result = build_report(spec("Хирургия", 0.0, 2000.0), services, date(2026, 4, 27))
+    assert "Повысили цены" in result
+    assert "Снизили цены" in result
+
+
+def test_org_name_is_bold():
+    result = build_report(
+        spec("Хирургия", 100.0, 1000.0),
+        [svc("Клиника Альфа", "УЗИ", 1100.0, 100.0)],
+        date(2026, 4, 27),
+    )
+    assert "<b>Клиника Альфа</b>" in result
+
+
+def test_report_header_present():
+    result = build_report(spec("Хирургия", 100.0, 1000.0), [svc("Клиника А", "УЗИ", 1100.0, 100.0)], date(2026, 4, 27))
+    assert "Еженедельный отчёт по ценам конкурентов" in result

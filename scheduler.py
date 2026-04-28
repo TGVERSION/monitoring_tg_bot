@@ -48,7 +48,7 @@ async def send_weekly_report(bot) -> None:
     users = await get_active_users()
     for user in users:
         try:
-            await bot.send_message(user["telegram_id"], message)
+            await bot.send_message(user["telegram_id"], message, parse_mode="HTML")
         except Exception as exc:
             logger.error("Failed to send to %s: %s", user["telegram_id"], exc)
             if "bot was blocked" in str(exc).lower():
