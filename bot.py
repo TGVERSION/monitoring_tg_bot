@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN, REPORT_DAY, REPORT_TIME
-from handlers import admin, registration
+from handlers import admin, broadcast, registration
 from scheduler import create_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -17,6 +17,7 @@ async def main() -> None:
 
     dp.include_router(registration.router)
     dp.include_router(admin.router)
+    dp.include_router(broadcast.router)
 
     scheduler = create_scheduler(bot)
     scheduler.start()

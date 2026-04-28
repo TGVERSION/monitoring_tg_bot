@@ -59,7 +59,7 @@ def _main_menu() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🔧 Фильтры", callback_data="admin_filters")],
             [InlineKeyboardButton(text="🏥 Организации", callback_data="admin_orgs")],
             [InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")],
-            [InlineKeyboardButton(text="📨 Тест-рассылка", callback_data="admin_test_broadcast")],
+            [InlineKeyboardButton(text="📨 Рассылка", callback_data="admin_broadcast")],
         ]
     )
 
@@ -251,19 +251,6 @@ async def show_users(callback: CallbackQuery) -> None:
     )
     await callback.answer()
 
-
-@router.callback_query(F.data == "admin_test_broadcast")
-async def test_broadcast(callback: CallbackQuery) -> None:
-    from scheduler import send_weekly_report
-
-    await callback.message.answer("Запускаю тест-рассылку...")
-    try:
-        await send_weekly_report(callback.bot, force=True)
-        await callback.message.answer("✅ Тест-рассылка завершена.")
-    except Exception as exc:
-        logger.error("Test broadcast failed: %s", exc)
-        await callback.message.answer(f"❌ Ошибка: {exc}")
-    await callback.answer()
 
 
 @router.callback_query(F.data == "admin_back")
