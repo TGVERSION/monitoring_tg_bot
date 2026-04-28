@@ -146,3 +146,44 @@ def test_org_name_is_bold():
 def test_report_header_present():
     result = build_report(spec("Хирургия", 100.0, 1000.0), [svc("Клиника А", "УЗИ", 1100.0, 100.0)], date(2026, 4, 27))
     assert "Еженедельный отчёт по ценам конкурентов" in result
+
+
+def test_up_services_sorted_by_abs_pct_descending():
+    # Клиника Б: old=2000, diff=+600 → +30%
+    # Клиника А: old=1000, diff=+100 → +10%
+    # Клиника В: old=1000, diff=+50  → +5%
+    # Переданы в обратном порядке — в отчёте должны идти Б → А → В
+    services = [
+        svc("Клиника А", "УЗИ", 1100.0, 100.0),
+        svc("Клиника В", "Анализ", 1050.0, 50.0),
+        svc("Клиника Б", "МРТ", 2600.0, 600.0),
+    ]
+    result = build_report(spec("Хирургия", 750.0, 4000.0), services, date(2026, 4, 27))
+    assert result.index("Клиника Б") < result.index("Клиника А") < result.index("Клиника В")
+
+
+def test_down_services_sorted_by_abs_pct_descending():
+    # Клиника Б: old=2000, diff=-600 → -30%
+    # Клиника А: old=1000, diff=-100 → -10%
+    # Клиника В: old=1000, diff=-50  → -5%
+    services = [
+        svc("Клиника А", "УЗИ", 900.0, -100.0),
+        svc("Клиника В", "Анализ", 950.0, -50.0),
+        svc("Клиника Б", "МРТ", 1400.0, -600.0),
+    ]
+    result = build_report(spec("Хирургия", -750.0, 4000.0), services, date(2026, 4, 27))
+    assert result.index("Клиника Б") < result.index("Клиника А") < result.index("Клиника В")
+
+
+def test_mixed_up_down_each_section_sorted_by_abs_pct_descending():
+    # Up: Клиника Б +30%, Клиника А +10%
+    # Down: Клиника Г -30%, Клиника В -10%
+    services = [
+        svc("Клиника А", "УЗИ", 1100.0, 100.0),
+        svc("Клиника Б", "МРТ", 2600.0, 600.0),
+        svc("Клиника В", "Рентген", 900.0, -100.0),
+        svc("Клиника Г", "КТ", 1400.0, -600.0),
+    ]
+    result = build_report(spec("Хирургия", 0.0, 6000.0), services, date(2026, 4, 27))
+    assert result.index("Клиника Б") < result.index("Клиника А")
+    assert result.index("Клиника Г") < result.index("Клиника В")

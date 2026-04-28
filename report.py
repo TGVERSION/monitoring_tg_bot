@@ -16,8 +16,8 @@ def build_report(spec_row, services: list, report_date: date) -> str | None:
     avg_pct = round(net_change / sum_old_price * 100, 1) if sum_old_price else 0.0
     pct_sign = "+" if avg_pct > 0 else ""
 
-    up_lines = []
-    down_lines = []
+    up_items = []   # (abs_pct, line)
+    down_items = []
     for svc in services:
         diff = float(svc["PriceDifference"] or 0)
         if diff == 0:
@@ -31,9 +31,14 @@ def build_report(spec_row, services: list, report_date: date) -> str | None:
             f" {svc['ServiceName']} 💰 {_fmt_price(price)} ₽ ({svc_sign}{svc_pct:.1f}%)"
         )
         if diff > 0:
-            up_lines.append(line)
+            up_items.append((abs(svc_pct), line))
         else:
-            down_lines.append(line)
+            down_items.append((abs(svc_pct), line))
+
+    up_items.sort(key=lambda x: x[0], reverse=True)
+    down_items.sort(key=lambda x: x[0], reverse=True)
+    up_lines = [line for _, line in up_items]
+    down_lines = [line for _, line in down_items]
 
     if not up_lines and not down_lines:
         return None
