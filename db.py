@@ -116,12 +116,26 @@ async def get_active_filters() -> list:
     )
 
 
-async def get_top_specialization(last_date):
+def _build_filter_clause(filters: list, next_param: int) -> tuple:
+    if not filters:
+        return "", []
+    or_clauses = []
+    params = []
+    for i, f in enumerate(filters, start=next_param):
+        if f["field_name"] not in ALLOWED_FILTER_FIELDS:
+            raise ValueError(f"Disallowed filter field: {f['field_name']!r}")
+        or_clauses.append(f'"{f["field_name"]}" = ${i}')
+        params.append(f["field_value"])
+    return f"AND ({' OR '.join(or_clauses)})", params
+
+
+async def get_top_specialization(last_date, filters: list = None):
     pool = await get_pool()
     fallback = date_type(1900, 1, 1)
     since = last_date if last_date is not None else fallback
+    filter_clause, filter_params = _build_filter_clause(filters or [], next_param=2)
     return await pool.fetchrow(
-        """
+        f"""
         SELECT
             specialization,
             SUM(ABS("PriceDifference")) AS total_abs_change,
@@ -134,20 +148,22 @@ async def get_top_specialization(last_date):
           AND "PriceDifference" IS NOT NULL
           AND "Price" IS NOT NULL
           AND "OrganizationName" IN (SELECT organization_name FROM organizations)
+          {filter_clause}
         GROUP BY specialization
         ORDER BY total_abs_change DESC
         LIMIT 1
         """,
-        since,
+        since, *filter_params,
     )
 
 
-async def get_top_service_per_org(specialization: str, last_date) -> list:
+async def get_top_service_per_org(specialization: str, last_date, filters: list = None) -> list:
     pool = await get_pool()
     fallback = date_type(1900, 1, 1)
     since = last_date if last_date is not None else fallback
+    filter_clause, filter_params = _build_filter_clause(filters or [], next_param=3)
     return await pool.fetch(
-        """
+        f"""
         SELECT DISTINCT ON ("OrganizationName")
             "OrganizationName",
             "ServiceName",
@@ -159,9 +175,10 @@ async def get_top_service_per_org(specialization: str, last_date) -> list:
           AND "PriceDifference" IS NOT NULL
           AND "Price" IS NOT NULL
           AND "OrganizationName" IN (SELECT organization_name FROM organizations)
+          {filter_clause}
         ORDER BY "OrganizationName", ABS("PriceDifference") DESC
         """,
-        since, specialization,
+        since, specialization, *filter_params,
     )
 
 

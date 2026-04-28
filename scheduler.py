@@ -7,6 +7,7 @@ from apscheduler.triggers.cron import CronTrigger
 from config import REPORT_DAY, REPORT_TIME
 from db import (
     deactivate_user,
+    get_active_filters,
     get_active_users,
     get_last_processed_date,
     get_max_insert_date,
@@ -31,12 +32,13 @@ async def send_weekly_report(bot) -> None:
         logger.info("No new rows since %s, skipping", last_date)
         return
 
-    spec_row = await get_top_specialization(last_date)
+    filters = await get_active_filters()
+    spec_row = await get_top_specialization(last_date, filters)
     if spec_row is None:
         logger.info("No specialization data found, skipping")
         return
 
-    services = await get_top_service_per_org(spec_row["specialization"], last_date)
+    services = await get_top_service_per_org(spec_row["specialization"], last_date, filters)
     message = build_report(spec_row, services, date.today())
 
     if message is None:

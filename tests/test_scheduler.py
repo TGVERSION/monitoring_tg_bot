@@ -22,6 +22,10 @@ def _services():
     ]
 
 
+def _filters():
+    return [{"field_name": "type_group", "field_value": "Прием"}]
+
+
 @pytest.mark.asyncio
 async def test_skip_when_no_data_in_db():
     with patch("scheduler.get_last_processed_date", new_callable=AsyncMock) as m_last, \
@@ -50,9 +54,11 @@ async def test_skip_when_no_new_rows():
 async def test_skip_when_no_specialization_data():
     with patch("scheduler.get_last_processed_date", new_callable=AsyncMock) as m_last, \
          patch("scheduler.get_max_insert_date", new_callable=AsyncMock) as m_max, \
+         patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
          patch("scheduler.get_top_specialization", new_callable=AsyncMock) as m_spec:
         m_last.return_value = date(2026, 4, 20)
         m_max.return_value = date(2026, 4, 27)
+        m_filters.return_value = _filters()
         m_spec.return_value = None
         bot = AsyncMock()
         from scheduler import send_weekly_report
@@ -64,12 +70,14 @@ async def test_skip_when_no_specialization_data():
 async def test_sends_report_to_all_active_users():
     with patch("scheduler.get_last_processed_date", new_callable=AsyncMock) as m_last, \
          patch("scheduler.get_max_insert_date", new_callable=AsyncMock) as m_max, \
+         patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
          patch("scheduler.get_top_specialization", new_callable=AsyncMock) as m_spec, \
          patch("scheduler.get_top_service_per_org", new_callable=AsyncMock) as m_svc, \
          patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
          patch("scheduler.update_last_processed_date", new_callable=AsyncMock) as m_update:
         m_last.return_value = date(2026, 4, 20)
         m_max.return_value = date(2026, 4, 27)
+        m_filters.return_value = _filters()
         m_spec.return_value = _spec_row()
         m_svc.return_value = _services()
         m_users.return_value = [
@@ -86,15 +94,39 @@ async def test_sends_report_to_all_active_users():
 
 
 @pytest.mark.asyncio
-async def test_all_users_get_same_message():
+async def test_filters_passed_to_db_functions():
     with patch("scheduler.get_last_processed_date", new_callable=AsyncMock) as m_last, \
          patch("scheduler.get_max_insert_date", new_callable=AsyncMock) as m_max, \
+         patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
          patch("scheduler.get_top_specialization", new_callable=AsyncMock) as m_spec, \
          patch("scheduler.get_top_service_per_org", new_callable=AsyncMock) as m_svc, \
          patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
          patch("scheduler.update_last_processed_date", new_callable=AsyncMock):
         m_last.return_value = date(2026, 4, 20)
         m_max.return_value = date(2026, 4, 27)
+        m_filters.return_value = _filters()
+        m_spec.return_value = _spec_row()
+        m_svc.return_value = _services()
+        m_users.return_value = [{"telegram_id": 111}]
+        bot = AsyncMock()
+        from scheduler import send_weekly_report
+        await send_weekly_report(bot)
+        m_spec.assert_called_once_with(date(2026, 4, 20), _filters())
+        m_svc.assert_called_once_with("Хирургия", date(2026, 4, 20), _filters())
+
+
+@pytest.mark.asyncio
+async def test_all_users_get_same_message():
+    with patch("scheduler.get_last_processed_date", new_callable=AsyncMock) as m_last, \
+         patch("scheduler.get_max_insert_date", new_callable=AsyncMock) as m_max, \
+         patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
+         patch("scheduler.get_top_specialization", new_callable=AsyncMock) as m_spec, \
+         patch("scheduler.get_top_service_per_org", new_callable=AsyncMock) as m_svc, \
+         patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
+         patch("scheduler.update_last_processed_date", new_callable=AsyncMock):
+        m_last.return_value = date(2026, 4, 20)
+        m_max.return_value = date(2026, 4, 27)
+        m_filters.return_value = _filters()
         m_spec.return_value = _spec_row()
         m_svc.return_value = _services()
         m_users.return_value = [{"telegram_id": 111}, {"telegram_id": 222}]
@@ -110,12 +142,14 @@ async def test_all_users_get_same_message():
 async def test_continues_after_single_user_error():
     with patch("scheduler.get_last_processed_date", new_callable=AsyncMock) as m_last, \
          patch("scheduler.get_max_insert_date", new_callable=AsyncMock) as m_max, \
+         patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
          patch("scheduler.get_top_specialization", new_callable=AsyncMock) as m_spec, \
          patch("scheduler.get_top_service_per_org", new_callable=AsyncMock) as m_svc, \
          patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
          patch("scheduler.update_last_processed_date", new_callable=AsyncMock) as m_update:
         m_last.return_value = date(2026, 4, 20)
         m_max.return_value = date(2026, 4, 27)
+        m_filters.return_value = _filters()
         m_spec.return_value = _spec_row()
         m_svc.return_value = _services()
         m_users.return_value = [{"telegram_id": 111}, {"telegram_id": 222}]
@@ -131,6 +165,7 @@ async def test_continues_after_single_user_error():
 async def test_deactivates_user_when_bot_blocked():
     with patch("scheduler.get_last_processed_date", new_callable=AsyncMock) as m_last, \
          patch("scheduler.get_max_insert_date", new_callable=AsyncMock) as m_max, \
+         patch("scheduler.get_active_filters", new_callable=AsyncMock) as m_filters, \
          patch("scheduler.get_top_specialization", new_callable=AsyncMock) as m_spec, \
          patch("scheduler.get_top_service_per_org", new_callable=AsyncMock) as m_svc, \
          patch("scheduler.get_active_users", new_callable=AsyncMock) as m_users, \
@@ -138,6 +173,7 @@ async def test_deactivates_user_when_bot_blocked():
          patch("scheduler.deactivate_user", new_callable=AsyncMock) as m_deactivate:
         m_last.return_value = date(2026, 4, 20)
         m_max.return_value = date(2026, 4, 27)
+        m_filters.return_value = _filters()
         m_spec.return_value = _spec_row()
         m_svc.return_value = _services()
         m_users.return_value = [{"telegram_id": 111}]
