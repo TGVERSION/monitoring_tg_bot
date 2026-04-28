@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
@@ -9,7 +11,10 @@ from aiogram.types import (
     Message,
 )
 
+from config import ADMIN_TELEGRAM_ID
 from db import get_organization_by_inn, get_user_by_telegram_id, register_user
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -29,7 +34,8 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             return
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[
-                InlineKeyboardButton(text="Изменить клинику", callback_data="change_clinic")
+                InlineKeyboardButton(
+                    text="Изменить клинику", callback_data="change_clinic")
             ]]
         )
         await message.answer(
@@ -38,13 +44,12 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         )
     else:
         await message.answer(
-            "👋 <b>Добро пожаловать в бот мониторинга цен конкурентов!</b>\n"
+            "👋 <b>Добро пожаловать в бот мониторинга конкурентов!</b>\n"
             "\n"
             "📊 <b>Что умеет этот бот:</b>\n"
             "• Каждый понедельник в 9:30 присылает отчёт об изменении цен в конкурирующих клиниках\n"
             "• Показывает специализации с наибольшими изменениями цен\n"
             "• Выделяет конкретные услуги, которые подорожали или подешевели, с указанием клиники и процента изменения\n"
-            "• Содержит ссылку на полный дашборд аналитики\n"
             "\n"
             "Чтобы начать, введите ИНН вашей клиники:",
             parse_mode="HTML",
@@ -73,3 +78,15 @@ async def process_inn(message: Message, state: FSMContext) -> None:
     await message.answer(
         f"✅ Вы успешно зарегистрированы как представитель клиники «{org['organization_name']}»."
     )
+    user = message.from_user
+    name = f"@{user.username}" if user.username else user.full_name
+    try:
+        await message.bot.send_message(
+            ADMIN_TELEGRAM_ID,
+            f"🆕 <b>Новый пользователь зарегистрировался</b>\n"
+            f"Клиника: {org['organization_name']}\n"
+            f"Telegram: {name} (ID: {user.id})",
+            parse_mode="HTML",
+        )
+    except Exception:
+        logger.warning("Failed to notify admin about new user %s", user.id)
