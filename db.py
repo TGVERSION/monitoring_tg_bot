@@ -146,9 +146,9 @@ async def _fetch_top_specializations(last_date, filters, limit: int) -> list:
         f"""
         SELECT
             specialization,
-            SUM(ABS("PriceDifference")) AS total_abs_change,
-            SUM("PriceDifference")      AS net_change,
-            SUM("Price" - "PriceDifference") AS sum_old_price
+            SUM(ABS("PriceDifference"::numeric)) AS total_abs_change,
+            SUM("PriceDifference"::numeric)      AS net_change,
+            SUM("Price"::numeric - "PriceDifference"::numeric) AS sum_old_price
         FROM price_monitoring
         WHERE "InsertDate" > $1
           AND specialization IS NOT NULL
@@ -193,7 +193,7 @@ async def get_top_service_per_org(specialization: str, last_date, filters: list 
           AND "Price" IS NOT NULL
           AND "OrganizationName" IN (SELECT organization_name FROM organizations)
           {filter_clause}
-        ORDER BY "OrganizationName", ABS("PriceDifference") DESC
+        ORDER BY "OrganizationName", ABS("PriceDifference"::numeric) DESC
         """,
         since, specialization, *filter_params,
     )
