@@ -133,6 +133,26 @@ async def custom_text_received(message: Message, state: FSMContext) -> None:
     )
 
 
+@router.callback_query(F.data == "bcast_confirm_custom", BroadcastState.confirming_custom)
+async def confirm_custom_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    text = data.get("custom_text", "")
+    await state.clear()
+    sent = await send_broadcast_text(callback.bot, text)
+    if sent == 0:
+        await callback.message.answer("Нет активных подписчиков.")
+    else:
+        await callback.message.answer(f"✅ Отправлено {sent} пользователям.")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "bcast_edit_custom", BroadcastState.confirming_custom)
+async def edit_custom_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(BroadcastState.typing_custom)
+    await callback.message.answer("Введите новый текст для рассылки:")
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("bcast_spec_"))
 async def select_specialization(callback: CallbackQuery, state: FSMContext) -> None:
     index = int(callback.data.split("_")[-1])
@@ -165,6 +185,7 @@ async def select_specialization(callback: CallbackQuery, state: FSMContext) -> N
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Отправить всем", callback_data="bcast_confirm")],
+                [InlineKeyboardButton(text="✏️ Свой текст", callback_data="bcast_custom_start")],
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="bcast_cancel")],
             ]
         ),
