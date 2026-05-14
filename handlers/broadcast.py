@@ -1,10 +1,11 @@
 import logging
 from datetime import date
+from html import escape as html_escape
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from db import (
     deactivate_user,
@@ -22,7 +23,9 @@ router.callback_query.filter(IsAdmin())
 
 
 class BroadcastState(StatesGroup):
-    confirming = State()
+    confirming        = State()
+    typing_custom     = State()
+    confirming_custom = State()
 
 
 def _spec_button_label(spec_row) -> str:
@@ -96,6 +99,38 @@ async def show_broadcast_menu(callback: CallbackQuery) -> None:
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "bcast_custom_start", BroadcastState.confirming)
+async def custom_broadcast_start(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await state.set_state(BroadcastState.typing_custom)
+    await callback.message.answer("Введите текст для рассылки:")
+    await callback.answer()
+
+
+@router.message(BroadcastState.typing_custom, IsAdmin())
+async def custom_text_received(message: Message, state: FSMContext) -> None:
+    text = message.text.strip() if message.text else ""
+    if not text:
+        await message.answer("Текст не может быть пустым. Введите сообщение:")
+        return
+    if len(text) > 4096:
+        await message.answer("Слишком длинный текст (максимум 4096 символов). Введите короче:")
+        return
+    await state.update_data(custom_text=text)
+    await state.set_state(BroadcastState.confirming_custom)
+    await message.answer(
+        f"<b>Ваш текст:</b>\n\n{html_escape(text)}",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Отправить всем", callback_data="bcast_confirm_custom")],
+                [InlineKeyboardButton(text="✏️ Изменить", callback_data="bcast_edit_custom")],
+                [InlineKeyboardButton(text="❌ Отмена", callback_data="bcast_cancel")],
+            ]
+        ),
+    )
 
 
 @router.callback_query(F.data.startswith("bcast_spec_"))

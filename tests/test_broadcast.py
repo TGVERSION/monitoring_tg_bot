@@ -217,3 +217,27 @@ async def test_send_broadcast_text_no_parse_mode():
         await send_broadcast_text(bot, "Привет!")
         _, kwargs = bot.send_message.call_args
         assert "parse_mode" not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_custom_text_empty_rejected():
+    message = AsyncMock()
+    message.text = "   "
+    state = AsyncMock()
+    from handlers.broadcast import custom_text_received
+    await custom_text_received(message, state)
+    message.answer.assert_called_once()
+    assert "пустым" in message.answer.call_args[0][0]
+    state.update_data.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_custom_text_too_long_rejected():
+    message = AsyncMock()
+    message.text = "а" * 4097
+    state = AsyncMock()
+    from handlers.broadcast import custom_text_received
+    await custom_text_received(message, state)
+    message.answer.assert_called_once()
+    assert "4096" in message.answer.call_args[0][0]
+    state.update_data.assert_not_called()
