@@ -156,3 +156,64 @@ def test_send_broadcast_does_not_import_update_last_processed_date():
     import handlers.broadcast as bmod
     assert not hasattr(bmod, "update_last_processed_date"), \
         "broadcast не должен импортировать update_last_processed_date"
+
+
+@pytest.mark.asyncio
+async def test_send_broadcast_text_sends_to_all_users():
+    with patch("handlers.broadcast.get_active_users", new_callable=AsyncMock) as m_users, \
+         patch("handlers.broadcast.deactivate_user", new_callable=AsyncMock):
+        m_users.return_value = [{"telegram_id": 111}, {"telegram_id": 222}]
+        bot = AsyncMock()
+        from handlers.broadcast import send_broadcast_text
+        sent = await send_broadcast_text(bot, "Привет!")
+        assert sent == 2
+        bot.send_message.assert_any_call(111, "Привет!")
+        bot.send_message.assert_any_call(222, "Привет!")
+
+
+@pytest.mark.asyncio
+async def test_send_broadcast_text_no_users():
+    with patch("handlers.broadcast.get_active_users", new_callable=AsyncMock) as m_users:
+        m_users.return_value = []
+        bot = AsyncMock()
+        from handlers.broadcast import send_broadcast_text
+        sent = await send_broadcast_text(bot, "Привет!")
+        assert sent == 0
+        bot.send_message.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_broadcast_text_continues_after_error():
+    with patch("handlers.broadcast.get_active_users", new_callable=AsyncMock) as m_users, \
+         patch("handlers.broadcast.deactivate_user", new_callable=AsyncMock):
+        m_users.return_value = [{"telegram_id": 111}, {"telegram_id": 222}]
+        bot = AsyncMock()
+        bot.send_message.side_effect = [Exception("network error"), None]
+        from handlers.broadcast import send_broadcast_text
+        sent = await send_broadcast_text(bot, "Привет!")
+        assert sent == 1
+        assert bot.send_message.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_send_broadcast_text_deactivates_blocked_user():
+    with patch("handlers.broadcast.get_active_users", new_callable=AsyncMock) as m_users, \
+         patch("handlers.broadcast.deactivate_user", new_callable=AsyncMock) as m_deactivate:
+        m_users.return_value = [{"telegram_id": 111}]
+        bot = AsyncMock()
+        bot.send_message.side_effect = Exception("Forbidden: bot was blocked by the user")
+        from handlers.broadcast import send_broadcast_text
+        await send_broadcast_text(bot, "Привет!")
+        m_deactivate.assert_called_once_with(111)
+
+
+@pytest.mark.asyncio
+async def test_send_broadcast_text_no_parse_mode():
+    with patch("handlers.broadcast.get_active_users", new_callable=AsyncMock) as m_users, \
+         patch("handlers.broadcast.deactivate_user", new_callable=AsyncMock):
+        m_users.return_value = [{"telegram_id": 111}]
+        bot = AsyncMock()
+        from handlers.broadcast import send_broadcast_text
+        await send_broadcast_text(bot, "Привет!")
+        _, kwargs = bot.send_message.call_args
+        assert "parse_mode" not in kwargs

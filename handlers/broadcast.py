@@ -58,6 +58,20 @@ async def send_broadcast(bot, specialization_name: str, filters: list) -> int:
     return sent
 
 
+async def send_broadcast_text(bot, text: str) -> int:
+    users = await get_active_users()
+    sent = 0
+    for user in users:
+        try:
+            await bot.send_message(user["telegram_id"], text)
+            sent += 1
+        except Exception as exc:
+            logger.error("Failed to send to %s: %s", user["telegram_id"], exc)
+            if "bot was blocked" in str(exc).lower():
+                await deactivate_user(user["telegram_id"])
+    return sent
+
+
 @router.callback_query(F.data == "admin_broadcast")
 async def show_broadcast_menu(callback: CallbackQuery) -> None:
     filters = await get_active_filters()
