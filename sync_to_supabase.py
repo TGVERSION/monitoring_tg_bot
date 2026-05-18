@@ -7,6 +7,8 @@ then re-insert fresh data from local DB. Handles both INSERT and UPDATE.
 import logging
 import os
 import sys
+import time as _time
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import psycopg2
@@ -32,13 +34,25 @@ SUPABASE_DSN = os.environ["DATABASE_URL"]
 SYNC_DAYS = int(os.getenv("SYNC_DAYS", "60"))
 BATCH_SIZE = int(os.getenv("SYNC_BATCH_SIZE", "500"))
 
-# Columns to sync (excludes local Id — Supabase generates its own)
 SYNC_COLUMNS = [
     "ExternalId", "OrganizationName", "GroupName", "SubGroupName", "ServiceName",
     "Price", "InsertDate", "NonNormalizedPrice", "reference_serv", "PriceDifference",
     "PriceHandlerSkip", "type_reception", "specialization", "type_reception_skip",
     "specialization_skip", "type_filial", "type_filial_skip", "type_group", "type_group_skip",
 ]
+
+
+@dataclass
+class SyncProgress:
+    sync_days: int = 0
+    since: date | None = None
+    total: int = 0
+    inserted: int = 0
+    deleted: int = 0
+    # phase: "init" | "deleting" | "inserting" | "done" | "error"
+    phase: str = "init"
+    error: str | None = None
+    started_at: float = field(default_factory=_time.time)
 
 
 def _local_conn():
@@ -51,8 +65,13 @@ def _local_conn():
     )
 
 
-def sync():
+def sync(progress: SyncProgress | None = None) -> int:
+    if progress is None:
+        progress = SyncProgress()
+
     since = date.today() - timedelta(days=SYNC_DAYS)
+    progress.sync_days = SYNC_DAYS
+    progress.since = since
     logger.info("Starting sync: last %d days (from %s)", SYNC_DAYS, since)
 
     col_list = ", ".join(f'"{c}"' for c in SYNC_COLUMNS)
@@ -66,15 +85,19 @@ def sync():
             'SELECT COUNT(*) FROM price_monitoring WHERE "InsertDate" >= %s', (since,)
         )
         local_count = local_cur.fetchone()[0]
+        progress.total = local_count
         logger.info("Local rows in window: %d", local_count)
 
+        progress.phase = "deleting"
         supa_cur.execute(
             'DELETE FROM price_monitoring WHERE "InsertDate" >= %s', (since,)
         )
         deleted = supa_cur.rowcount
         supa_conn.commit()
+        progress.deleted = deleted
         logger.info("Deleted %d rows from Supabase", deleted)
 
+        progress.phase = "inserting"
         local_cur.execute(
             f'SELECT {col_list} FROM price_monitoring WHERE "InsertDate" >= %s ORDER BY "InsertDate"',
             (since,),
@@ -93,9 +116,12 @@ def sync():
             )
             supa_conn.commit()
             inserted += len(rows)
+            progress.inserted = inserted
             logger.info("Progress: %d / %d rows inserted", inserted, local_count)
 
+    progress.phase = "done"
     logger.info("Sync complete. Inserted %d rows total.", inserted)
+    return inserted
 
 
 if __name__ == "__main__":
