@@ -150,7 +150,7 @@ async def _fetch_top_specializations(last_date, filters, limit: int) -> list:
             SUM("PriceDifference"::numeric)      AS net_change,
             SUM("Price"::numeric - "PriceDifference"::numeric) AS sum_old_price
         FROM price_monitoring
-        WHERE "InsertDate"::date > $1
+        WHERE "InsertDate" > $1
           AND specialization IS NOT NULL
           AND specialization <> ''
           AND "PriceDifference" IS NOT NULL
@@ -187,7 +187,7 @@ async def get_top_service_per_org(specialization: str, last_date, filters: list 
             "Price",
             "PriceDifference"
         FROM price_monitoring
-        WHERE "InsertDate"::date > $1
+        WHERE "InsertDate" > $1
           AND specialization = $2
           AND "PriceDifference" IS NOT NULL
           AND "Price" IS NOT NULL
@@ -247,7 +247,7 @@ async def get_price_data_for_org(
             """
             SELECT "GroupName", "Price", "PriceDifference"
             FROM price_monitoring
-            WHERE "OrganizationName" = $1 AND "InsertDate"::date > $2
+            WHERE "OrganizationName" = $1 AND "InsertDate" > $2
             """,
             organization_name, since,
         )
@@ -264,7 +264,7 @@ async def get_price_data_for_org(
         SELECT "GroupName", "Price", "PriceDifference"
         FROM price_monitoring
         WHERE "OrganizationName" = $1
-          AND "InsertDate"::date > $2
+          AND "InsertDate" > $2
           AND ({" OR ".join(or_clauses)})
     """
     return await pool.fetch(query, *params)
