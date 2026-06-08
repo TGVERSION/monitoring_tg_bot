@@ -1,6 +1,4 @@
-import asyncio
 import logging
-import time
 
 from aiogram import F, Router
 from aiogram.filters import BaseFilter, Command
@@ -56,9 +54,6 @@ class AdminState(StatesGroup):
     waiting_org_name = State()
 
 
-_sync_running = False
-
-
 def _main_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -66,51 +61,9 @@ def _main_menu() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🏥 Организации", callback_data="admin_orgs")],
             [InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")],
             [InlineKeyboardButton(text="📨 Рассылка", callback_data="admin_broadcast")],
-            [InlineKeyboardButton(text="🔄 Синхронизация БД", callback_data="admin_sync")],
         ]
     )
 
-
-def _fmt_sync_progress(p) -> str:
-    elapsed = time.time() - p.started_at
-    m_el, s_el = divmod(int(elapsed), 60)
-
-    if p.phase == "init":
-        return "🔄 Синхронизация запускается..."
-
-    since_str = str(p.since) if p.since else "—"
-
-    if p.phase == "deleting":
-        return (
-            f"🔄 Синхронизация с локальной БД\n"
-            f"Окно: последние {p.sync_days} дней (с {since_str})\n\n"
-            f"⏳ Удаление старых записей из Supabase..."
-        )
-
-    pct = p.inserted / p.total * 100 if p.total else 0
-    rate = p.inserted / elapsed if elapsed > 1 else 0
-    remaining = (p.total - p.inserted) / rate if rate > 0 and p.phase == "inserting" else 0
-    m_rem, s_rem = divmod(int(remaining), 60)
-
-    ins_fmt = f"{p.inserted:,}".replace(",", " ")
-    tot_fmt = f"{p.total:,}".replace(",", " ")
-    del_fmt = f"{p.deleted:,}".replace(",", " ")
-
-    lines = [
-        f"{'✅ Синхронизация завершена' if p.phase == 'done' else '🔄 Синхронизация с локальной БД'}",
-        f"Окно: последние {p.sync_days} дней (с {since_str})",
-        "",
-        f"🗑 Удалено: {del_fmt} строк",
-        f"📊 Вставлено: {ins_fmt} / {tot_fmt} ({pct:.1f}%)",
-        f"⏱ Прошло: {m_el}:{s_el:02d}",
-    ]
-    if p.phase == "inserting" and rate > 0:
-        lines.append(f"⌛ Осталось: ~{m_rem}:{s_rem:02d}")
-
-    if p.phase == "error":
-        return f"❌ Ошибка синхронизации:\n{p.error}"
-
-    return "\n".join(lines)
 
 
 @router.message(Command("admin"))
@@ -256,7 +209,7 @@ async def org_add_start(callback: CallbackQuery, state: FSMContext) -> None:
 async def org_inn_received(message: Message, state: FSMContext) -> None:
     await state.update_data(inn=message.text.strip())
     await message.answer(
-        "Введите название организации (точно как в поле OrganizationName в price_monitoring):"
+        "Введите название организации (точно как в поле OrganizationName в clinic_prices):"
     )
     await state.set_state(AdminState.waiting_org_name)
 
@@ -337,42 +290,3 @@ async def admin_back(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_sync")
-async def admin_sync_start(callback: CallbackQuery) -> None:
-    global _sync_running
-    if _sync_running:
-        await callback.answer("Синхронизация уже запущена.", show_alert=True)
-        return
-
-    from sync_to_supabase import SyncProgress, sync
-
-    progress = SyncProgress()
-    _sync_running = True
-
-    msg = await callback.message.answer(_fmt_sync_progress(progress))
-    await callback.answer()
-
-    async def _run():
-        global _sync_running
-        try:
-            await asyncio.to_thread(sync, progress)
-        except Exception as exc:
-            progress.phase = "error"
-            progress.error = str(exc)
-            logger.exception("Manual sync failed")
-        finally:
-            _sync_running = False
-
-    task = asyncio.create_task(_run())
-
-    while not task.done():
-        await asyncio.sleep(3)
-        try:
-            await msg.edit_text(_fmt_sync_progress(progress))
-        except Exception:
-            pass
-
-    try:
-        await msg.edit_text(_fmt_sync_progress(progress))
-    except Exception:
-        pass

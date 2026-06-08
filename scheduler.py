@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import date
 
@@ -60,14 +59,6 @@ async def send_weekly_report(bot, force: bool = False) -> None:
         await update_last_processed_date(max_date)
 
 
-async def run_sync_to_supabase() -> None:
-    try:
-        from sync_to_supabase import sync
-        await asyncio.to_thread(sync)
-    except Exception:
-        logger.exception("Supabase sync failed")
-
-
 def create_scheduler(bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler()
     hour, minute = REPORT_TIME.split(":")
@@ -75,9 +66,5 @@ def create_scheduler(bot) -> AsyncIOScheduler:
         send_weekly_report,
         CronTrigger(day_of_week=REPORT_DAY, hour=int(hour), minute=int(minute)),
         args=[bot],
-    )
-    scheduler.add_job(
-        run_sync_to_supabase,
-        CronTrigger(hour=3, minute=0),
     )
     return scheduler

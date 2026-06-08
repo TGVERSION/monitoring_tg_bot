@@ -6,8 +6,8 @@ from datetime import date as date_type
 from config import DATABASE_URL
 
 ALLOWED_FILTER_FIELDS = {
-    "GroupName", "SubGroupName", "ServiceName", "reference_serv",
-    "type_reception", "specialization", "type_filial", "type_group",
+    "GroupName", "SubGroupName", "ServiceName",
+    "specialization", "type_group",
 }
 
 _pool = None
@@ -99,7 +99,7 @@ async def get_last_processed_date():
 async def get_max_insert_date():
     pool = await get_pool()
     row = await pool.fetchrow(
-        'SELECT MAX("InsertDate") AS max_date FROM price_monitoring'
+        'SELECT MAX("InsertDate") AS max_date FROM clinic_prices'
     )
     return row["max_date"] if row else None
 
@@ -120,7 +120,7 @@ async def update_last_processed_date(new_date) -> None:
 async def get_active_filters() -> list:
     pool = await get_pool()
     return await pool.fetch(
-        "SELECT field_name, field_value FROM admin_filters WHERE is_active = true"
+        "SELECT field_name, field_value FROM price_filters WHERE is_active = true"
     )
 
 
@@ -149,7 +149,7 @@ async def _fetch_top_specializations(last_date, filters, limit: int) -> list:
             SUM(ABS("PriceDifference"::numeric)) AS total_abs_change,
             SUM("PriceDifference"::numeric)      AS net_change,
             SUM("Price"::numeric - "PriceDifference"::numeric) AS sum_old_price
-        FROM price_monitoring
+        FROM clinic_prices
         WHERE "InsertDate" > $1
           AND specialization IS NOT NULL
           AND specialization <> ''
@@ -186,7 +186,7 @@ async def get_top_service_per_org(specialization: str, last_date, filters: list 
             "ServiceName",
             "Price",
             "PriceDifference"
-        FROM price_monitoring
+        FROM clinic_prices
         WHERE "InsertDate" > $1
           AND specialization = $2
           AND "PriceDifference" IS NOT NULL
@@ -202,21 +202,21 @@ async def get_top_service_per_org(specialization: str, last_date, filters: list 
 async def get_all_filters() -> list:
     pool = await get_pool()
     return await pool.fetch(
-        "SELECT id, field_name, field_value, is_active FROM admin_filters ORDER BY id"
+        "SELECT id, field_name, field_value, is_active FROM price_filters ORDER BY id"
     )
 
 
 async def add_filter(field_name: str, field_value: str) -> None:
     pool = await get_pool()
     await pool.execute(
-        "INSERT INTO admin_filters (field_name, field_value) VALUES ($1, $2)",
+        "INSERT INTO price_filters (field_name, field_value) VALUES ($1, $2)",
         field_name, field_value,
     )
 
 
 async def delete_filter(filter_id: int) -> None:
     pool = await get_pool()
-    await pool.execute("DELETE FROM admin_filters WHERE id = $1", filter_id)
+    await pool.execute("DELETE FROM price_filters WHERE id = $1", filter_id)
 
 
 async def get_all_organizations() -> list:
@@ -246,7 +246,7 @@ async def get_price_data_for_org(
         return await pool.fetch(
             """
             SELECT "GroupName", "Price", "PriceDifference"
-            FROM price_monitoring
+            FROM clinic_prices
             WHERE "OrganizationName" = $1 AND "InsertDate" > $2
             """,
             organization_name, since,
@@ -262,7 +262,7 @@ async def get_price_data_for_org(
 
     query = f"""
         SELECT "GroupName", "Price", "PriceDifference"
-        FROM price_monitoring
+        FROM clinic_prices
         WHERE "OrganizationName" = $1
           AND "InsertDate" > $2
           AND ({" OR ".join(or_clauses)})
